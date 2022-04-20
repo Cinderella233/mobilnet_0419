@@ -91,8 +91,8 @@ class MobileNetV2(nn.Module):
     def __init__(self,num_classes=100, width_mult=1.0, inverted_residual_setting=None, round_nearest=8):
         super(MobileNetV2, self).__init__()
         block = InvertedResidual
-        input_channel = 16
-        last_channel = 640
+        input_channel = 32
+        last_channel = 1280
 
         self.blocks = nn.ModuleList([])
         # building inverted residual and skip blocks
@@ -110,20 +110,20 @@ class MobileNetV2(nn.Module):
         if inverted_residual_setting is None:
             inverted_residual_setting = [
                 # t, c, n, s , m
-                # 64, 64, 16 -> 64, 64, 8
-                [1, 8, 1, 1, True],
-                # 64, 64, 8 -> 32, 32, 12
-                [6, 12, 2, 2, False],
-                # 32, 32, 12 -> 16, 16, 16
-                [6, 16, 2, 2, True],
-                # 16, 16, 18 -> 8, 8, 32
-                [6, 32, 2, 2, True],
-                # 8, 8, 36 -> 4, 4, 58
-                [6, 58, 2, 2, False],
-                # 4, 4, 54 -> 2, 2, 80
-                [6, 80, 2, 2, True],
-                # 2, 2, 80 -> 2, 2, 160
-                [6, 160, 1, 1, True],
+                # 112, 112, 32 -> 112, 112, 16
+                [1, 16, 1, 1, True],
+                # 112, 112, 16 -> 56, 56, 24
+                [6, 24, 2, 2, False],
+                # 56, 56, 24 -> 28, 28, 32
+                [6, 32, 3, 2, True],
+                # 28, 28, 32 -> 14, 14, 64
+                [6, 64, 4, 2, True],
+                # 14, 14, 64 -> 14, 14, 96
+                [6, 96, 3, 1, False],
+                # 14, 14, 96 -> 7, 7, 160
+                [6, 160, 3, 2, True],
+                # 7, 7, 160 -> 7, 7, 320
+                [6, 320, 1, 1, True],
             ]
 
         if len(inverted_residual_setting) == 0 or len(inverted_residual_setting[0]) != 5:
@@ -133,7 +133,7 @@ class MobileNetV2(nn.Module):
         input_channel = _make_divisible(input_channel * width_mult, round_nearest)
         self.last_channel = _make_divisible(last_channel * max(1.0, width_mult), round_nearest)
 
-        # 112, 112, 3 -> 64, 64, 16
+        # 224, 224, 3 -> 112, 112, 32
         features = [ConvBNReLU(3, input_channel, stride=2)]
 
         for t, c, n, s , m in inverted_residual_setting:
@@ -146,7 +146,7 @@ class MobileNetV2(nn.Module):
                 self.blocks.append(nn.Sequential(*features))
                 features = []
 
-        # 2, 2, 160 -> 2,2,640
+        # 7, 7, 320 -> 7,7,1280
         self.blocks.append(ConvBNReLU(input_channel, self.last_channel, kernel_size=1))
 
 
