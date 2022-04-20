@@ -23,7 +23,7 @@ class ConvBNReLU(nn.Sequential):
     def __init__(self, in_planes, out_planes, kernel_size=3, stride=1, groups=1):
         padding = (kernel_size - 1) // 2
         super(ConvBNReLU, self).__init__(
-            Conv2dFix(in_planes, out_planes, kernel_size, stride, padding, groups=groups, bias=False),
+            nn.Conv2d(in_planes, out_planes, kernel_size, stride, padding, groups=groups, bias=False),
             nn.BatchNorm2d(out_planes),
             nn.ReLU6(inplace=True)
         )
@@ -42,7 +42,7 @@ class InvertedResidual(nn.Module):
             layers.append(ConvBNReLU(inp, hidden_dim, kernel_size=1))
         layers.extend([
             ConvBNReLU(hidden_dim, hidden_dim, stride=stride, groups=hidden_dim),
-            Conv2dFix(hidden_dim, oup, 1, 1, 0, bias=False),
+            nn.Conv2d(hidden_dim, oup, 1, 1, 0, bias=False),
             nn.BatchNorm2d(oup),
         ])
         self.conv = nn.Sequential(*layers)
@@ -66,16 +66,16 @@ class SkipBlock(nn.Module):
 
         self.core_block = nn.Sequential(
             # pw
-            Conv2dFix(inp, hidden_dim, 1, 1, 0, bias=False),
+            nn.Conv2d(inp, hidden_dim, 1, 1, 0, bias=False),
             nn.BatchNorm2d(hidden_dim),
             nn.ReLU(inplace=True),
             # dw
-            Conv2dFix(hidden_dim, hidden_dim, kernel_size, stride, (kernel_size - 1) // 2, groups=hidden_dim, bias=False),
+            nn.Conv2d(hidden_dim, hidden_dim, kernel_size, stride, (kernel_size - 1) // 2, groups=hidden_dim, bias=False),
             nn.BatchNorm2d(hidden_dim),
             nn.ReLU(inplace=True),
 
             # pw-linear
-            Conv2dFix(hidden_dim, out, 1, 1, 0, bias=False),
+            nn.Conv2d(hidden_dim, out, 1, 1, 0, bias=False),
             nn.BatchNorm2d(out),
         )
 
@@ -88,11 +88,11 @@ class SkipBlock(nn.Module):
 
 
 class MobileNetV2(nn.Module):
-    def __init__(self,num_classes=1000, width_mult=1.0, inverted_residual_setting=None, round_nearest=8):
+    def __init__(self,num_classes=100, width_mult=1.0, inverted_residual_setting=None, round_nearest=8):
         super(MobileNetV2, self).__init__()
         block = InvertedResidual
-        input_channel = 32
-        last_channel = 1280
+        input_channel = 16
+        last_channel = 640
 
         self.blocks = nn.ModuleList([])
         # building inverted residual and skip blocks
@@ -100,30 +100,30 @@ class MobileNetV2(nn.Module):
 
         cfgs_skip = [
             # input_channel, exp_size, out_channel, kernel, stride, size
-            [16, 6, 32, 3, 1, 28],
-            [16, 6, 64, 3, 1, 14],
-            [16, 6, 160, 3, 1, 7],
-            [32, 6, 64, 3, 1, 14]
+            [8, 6, 16, 3, 1, 16],
+            [8, 6, 32, 3, 1, 8],
+            [8, 6, 80, 3, 1, 2],
+            [16, 6, 32, 3, 1, 8]
         ]
         self.cfgs_skipblocks = cfgs_skip
 
         if inverted_residual_setting is None:
             inverted_residual_setting = [
                 # t, c, n, s , m
-                # 112, 112, 32 -> 112, 112, 16
-                [1, 16, 1, 1, True],
-                # 112, 112, 16 -> 56, 56, 24
-                [6, 24, 2, 2, False],
-                # 56, 56, 24 -> 28, 28, 32
-                [6, 32, 3, 2, True],
-                # 28, 28, 32 -> 14, 14, 64
-                [6, 64, 4, 2, True],
-                # 14, 14, 64 -> 14, 14, 96
-                [6, 96, 3, 1, False],
-                # 14, 14, 96 -> 7, 7, 160
-                [6, 160, 3, 2, True],
-                # 7, 7, 160 -> 7, 7, 320
-                [6, 320, 1, 1, True],
+                # 64, 64, 16 -> 64, 64, 8
+                [1, 8, 1, 1, True],
+                # 64, 64, 8 -> 32, 32, 12
+                [6, 12, 2, 2, False],
+                # 32, 32, 12 -> 16, 16, 16
+                [6, 16, 2, 2, True],
+                # 16, 16, 18 -> 8, 8, 32
+                [6, 32, 2, 2, True],
+                # 8, 8, 36 -> 4, 4, 58
+                [6, 58, 2, 2, False],
+                # 4, 4, 54 -> 2, 2, 80
+                [6, 80, 2, 2, True],
+                # 2, 2, 80 -> 2, 2, 160
+                [6, 160, 1, 1, True],
             ]
 
         if len(inverted_residual_setting) == 0 or len(inverted_residual_setting[0]) != 5:
@@ -133,7 +133,7 @@ class MobileNetV2(nn.Module):
         input_channel = _make_divisible(input_channel * width_mult, round_nearest)
         self.last_channel = _make_divisible(last_channel * max(1.0, width_mult), round_nearest)
 
-        # 224, 224, 3 -> 112, 112, 32
+        # 112, 112, 3 -> 64, 64, 16
         features = [ConvBNReLU(3, input_channel, stride=2)]
 
         for t, c, n, s , m in inverted_residual_setting:
@@ -146,7 +146,7 @@ class MobileNetV2(nn.Module):
                 self.blocks.append(nn.Sequential(*features))
                 features = []
 
-        # 7, 7, 320 -> 7,7,1280
+        # 2, 2, 160 -> 2,2,640
         self.blocks.append(ConvBNReLU(input_channel, self.last_channel, kernel_size=1))
 
 
@@ -179,7 +179,7 @@ class MobileNetV2(nn.Module):
         )
 
         for m in self.modules():
-            if isinstance(m, Conv2dFix):
+            if isinstance(m, nn.Conv2d):
                 nn.init.kaiming_normal_(m.weight, mode='fan_out')
                 if m.bias is not None:
                     nn.init.zeros_(m.bias)
@@ -204,8 +204,8 @@ class MobileNetV2(nn.Module):
         x = self.blocks[1](x_base)
         x_skip4 =self.skip4(x)
         x = self.blocks[2](x + x_skip1)
-        x = self.blocks[3](x + x_skip2 + x_skip4)
-        x = self.blocks[4](x + x_skip3)
+        x = self.blocks[3](x +x_skip2 + x_skip4)
+        x = self.blocks[4](x +x_skip3)
         x = self.blocks[5](x)
         # 1280
         x = x.mean([2, 3])
